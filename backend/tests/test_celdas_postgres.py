@@ -28,10 +28,12 @@ def connection():
 def test_celda_schema_and_constraints(connection):
     inspector = inspect(connection)
     columns = {c['name']: c for c in inspector.get_columns('celda')}
-    assert set(columns) == {'id', 'codigo', 'tipo'}
+    assert set(columns) == {'id', 'codigo', 'tipo', 'activo'}
     assert str(columns['id']['type']) == 'BIGINT'
     assert columns['id']['identity']['always']
     assert all(not c['nullable'] for c in columns.values())
+    assert str(columns['activo']['type']) == 'BOOLEAN'
+    assert columns['activo']['default'] is not None
     assert inspector.get_pk_constraint('celda')['constrained_columns'] == ['id']
     assert any(c['column_names'] == ['codigo'] for c in inspector.get_unique_constraints('celda'))
     code = 'SCHEMA-' + uuid4().hex.upper()

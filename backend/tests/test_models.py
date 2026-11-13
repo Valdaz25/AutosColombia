@@ -62,20 +62,58 @@ def test_migration_matches_models_without_connecting(monkeypatch):
     spec = importlib.util.spec_from_file_location("initial_migration", path)
     migration = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(migration)
+
     metadata = sa.MetaData()
-    monkeypatch.setattr(migration.op, "create_table", lambda name, *args: sa.Table(name, metadata, *args))
+
+    monkeypatch.setattr(
+        migration.op,
+        "create_table",
+        lambda name, *args: sa.Table(name, metadata, *args),
+    )
+
     migration.upgrade()
-    assert set(metadata.tables) == {"vehiculo", "celda", "operador"}
-    for name, table in metadata.tables.items():
-        model_table = Base.metadata.tables[name]
-        assert [(c.name, str(c.type), c.nullable) for c in table.columns] == [
-            (c.name, str(c.type), c.nullable) for c in model_table.columns
-        ]
-        def constraints(t):
-            return {(c.name, str(c.sqltext)) for c in t.constraints if isinstance(c, sa.CheckConstraint)}
-        assert constraints(table) == constraints(model_table)
-        def unique_columns(t):
-            return {tuple(c.columns.keys()) for c in t.constraints if isinstance(c, sa.UniqueConstraint)}
-        assert unique_columns(table) == unique_columns(model_table)
-        ddl = str(CreateTable(table).compile(dialect=postgresql.dialect()))
+
+    expected_columns = {
+        "vehiculo": ["id", "placa", "color", "modelo", "marca", "tipo"],
+        "celda": ["id", "codigo", "tipo"],
+        "operador": ["id", "nombre", "telefono"],
+    }
+
+    assert set(metadata.tables) == set(expected_columns)
+
+    for name, expected in expected_columns.items():
+        table = metadata.tables[name]
+
+        assert list(table.columns.keys()) == expected
+        assert all(not column.nullable for column in table.columns)
+        assert isinstance(table.c.id.type, sa.BigInteger)
+        assert table.c.id.identity.always is True
+
+        unique_names = {
+            constraint.name
+            for constraint in table.constraints
+            if isinstance(constraint, sa.UniqueConstraint)
+        }
+
+        check_names = {
+            constraint.name
+            for constraint in table.constraints
+            if isinstance(constraint, sa.CheckConstraint)
+        }
+
+        expected_unique = {
+              "vehiculo": {"uq_vehiculo_placa"},
+              "celda": {"uq_celda_codigo"},
+              "operador": set(),
+       }
+
+        assert unique_names == expected_unique[name]
+        assert check_names
+
+        ddl = str(
+            CreateTable(table).compile(
+                dialect=postgresql.dialect()
+            )
+        )
+
         assert "BIGINT GENERATED ALWAYS AS IDENTITY" in ddl

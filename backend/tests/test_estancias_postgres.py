@@ -22,12 +22,19 @@ def datos():
     engine = get_engine()
     with engine.connect() as c:
         assert c.scalar(text('SELECT current_database()')) == 'autos_colombia'
-        assert c.scalar(text('SELECT version_num FROM alembic_version')) == '0002'
+        assert c.scalar(text('SELECT version_num FROM alembic_version')) == '0003'
     token = 'TEST-EST-' + uuid4().hex.upper()
     with Session(engine) as s, s.begin():
         vehicles = [Vehiculo(placa=f'{token}-{n}', color='Prueba', modelo=2026, marca='Prueba', tipo='MOTO') for n in range(2)]
         cells = [Celda(codigo=f'{token}-{n}', tipo='Libre') for n in range(2)]
-        operators = [Operador(nombre=f'{token}-{n}', telefono='001') for n in range(2)]
+        operators = [
+          Operador(
+             nombre=f'{token}-{n}',
+             telefono='001',
+             documento=f'{token}-DOC-{n}',
+          )
+          for n in range(2)
+        ]
         s.add_all(vehicles + cells + operators)
         s.flush()
         data = {'v': [v.id for v in vehicles], 'placas': [v.placa for v in vehicles],

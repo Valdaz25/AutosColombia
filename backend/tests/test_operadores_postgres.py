@@ -20,19 +20,26 @@ def test_operadores_structure_and_crud():
         transaction = connection.begin()
         try:
             assert connection.scalar(text("SELECT current_database()")) == "autos_colombia"
-            assert connection.scalar(text("SELECT version_num FROM alembic_version")) in {"0001", "0002"}
+            assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0003"
             inspector = inspect(connection)
             columns = {c["name"]: c for c in inspector.get_columns("operador")}
-            assert set(columns) == {"id", "nombre", "telefono"}
+            assert set(columns) == {"id", "nombre", "telefono", "documento", "activo"}
             assert str(columns["id"]["type"]) == "BIGINT"
             assert columns["id"]["identity"]["always"] is True
             assert all(not c["nullable"] for c in columns.values())
             assert str(columns["nombre"]["type"]) == str(columns["telefono"]["type"]) == "TEXT"
+            assert str(columns["documento"]["type"]) == "TEXT"
+            assert str(columns["activo"]["type"]) == "BOOLEAN"
             assert inspector.get_pk_constraint("operador")["constrained_columns"] == ["id"]
-            assert not inspector.get_unique_constraints("operador")
+            assert any(
+               c["column_names"] == ["documento"]
+               for c in inspector.get_unique_constraints("operador")
+          )
             assert {c["name"] for c in inspector.get_check_constraints("operador")} == {
-                "ck_operador_nombre_no_vacio", "ck_operador_telefono_no_vacio"
-            }
+               "ck_operador_nombre_no_vacio",
+               "ck_operador_telefono_no_vacio",
+               "ck_operador_documento_normalizado",
+}
             with Session(bind=connection, join_transaction_mode="create_savepoint") as session:
                 def override():
                     yield session
@@ -42,16 +49,30 @@ def test_operadores_structure_and_crud():
                     initial = client.get("/operadores").json()
                     assert initial["offset"] == 0 and initial["limit"] == 20
                     name = "TEST-OPERADOR-" + uuid4().hex
-                    payload = {"nombre": f" {name} ", "telefono": " +57 00123 "}
+                    payload = {
+                       "nombre": f" {name} ",
+                       "telefono": " +57 00123 ",
+                       "documento": "CC-" + uuid4().hex.upper(),
+                   }
                     created = client.post("/operadores", json=payload)
                     assert created.status_code == 201
                     item = created.json()
-                    assert item == {"id": item["id"], "nombre": name, "telefono": "+57 00123"}
+                    assert item == {
+                      "id": item["id"],
+                      "nombre": name,
+                      "telefono": "+57 00123",
+                      "documento": payload["documento"],
+                      "activo": True,
+                    }
                     assert type(item["id"]) is int and item["id"] > 0
                     path = f"/operadores/{item['id']}"
                     assert client.get(path).json() == item
                     # Nombre y teléfono repetidos están permitidos.
-                    duplicate = client.post("/operadores", json=payload)
+                    duplicate_payload = {
+                      **payload,
+                      "documento": "CC-" + uuid4().hex.upper(),
+                    }
+                    duplicate = client.post("/operadores", json=duplicate_payload)
                     assert duplicate.status_code == 201
                     duplicate_id = duplicate.json()["id"]
                     assert duplicate_id != item["id"]

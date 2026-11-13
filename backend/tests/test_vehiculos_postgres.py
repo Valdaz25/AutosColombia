@@ -23,9 +23,10 @@ def client():
         transaction = connection.begin()
         try:
             assert connection.scalar(text("SELECT current_database()")) == "autos_colombia"
-            assert connection.scalar(text("SELECT version_num FROM alembic_version")) in {"0001", "0002"}
+            
             with Session(bind=connection, join_transaction_mode="create_savepoint") as session:
                 def override_session():
+                    assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0003"
                     yield session
                 app.dependency_overrides[get_session] = override_session
                 try:

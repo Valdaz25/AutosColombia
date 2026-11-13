@@ -1,13 +1,24 @@
+
 from typing import Annotated, Literal
 
 from pydantic import AfterValidator, BaseModel, BeforeValidator, ConfigDict, Field, field_validator
 
-from app.models import required_text
+from app.models import required_text, normalize_identifier
 
 
-Texto = Annotated[str, BeforeValidator(lambda value: required_text(value, "El campo"))]
-Placa = Annotated[Texto, AfterValidator(str.upper)]
+Texto = Annotated[
+    str,
+    BeforeValidator(lambda value: required_text(value, "El campo"))
+]
+
+Placa = Annotated[
+    str,
+    BeforeValidator(lambda value: required_text(value, "La placa")),
+    AfterValidator(lambda value: normalize_identifier(value, "La placa"))
+]
+
 Anio = Annotated[int, Field(strict=True, ge=1, le=9999)]
+
 TipoVehiculo = Annotated[
     Literal["MOTO", "AUTOMOVIL", "CAMIONETA"],
     BeforeValidator(lambda value: required_text(value, "tipo")),
@@ -43,6 +54,7 @@ class VehiculoActualizar(BaseModel):
 
 class VehiculoRespuesta(VehiculoCrear):
     model_config = ConfigDict(from_attributes=True, extra="forbid")
+
     id: int
 
 

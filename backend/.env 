@@ -1,0 +1,6 @@
+DB_HOST=127.0.0.1
+DB_PORT=5432
+DB_NAME=autos_colombia
+DB_USER=autos_user
+DB_PASSWORD=AutosColombia2026_DB
+DB_CONNECT_TIMEOUT=5 
