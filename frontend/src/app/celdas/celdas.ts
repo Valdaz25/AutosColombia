@@ -1,17 +1,23 @@
+
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, ValidatorFn } from '@angular/forms';
 import { CeldasService } from '../services/celdas.service';
+import { AuthService } from '../services/auth.service';
 import { Celda, CeldaCrear } from '../models/celda';
 import { ErrorApi } from '../models/vehiculo';
 
 const nonBlank: ValidatorFn = (control) =>
-  typeof control.value === 'string' && control.value.trim() ? null : { required: true };
+  typeof control.value === 'string' && control.value.trim()
+    ? null
+    : { required: true };
+
 type Field = keyof CeldaCrear;
 
 @Component({
   selector: 'app-celdas',
+  standalone: true,
   imports: [ReactiveFormsModule],
   templateUrl: './celdas.html',
   styleUrl: './celdas.css',
@@ -20,14 +26,19 @@ export class Celdas {
   private readonly api = inject(CeldasService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly fb = inject(FormBuilder);
+
+  readonly auth = inject(AuthService);
+
   readonly fields = [
     { key: 'codigo' as const, label: 'Código' },
     { key: 'tipo' as const, label: 'Tipo' },
   ];
+
   readonly form = this.fb.group({
     codigo: this.fb.nonNullable.control('', nonBlank),
     tipo: this.fb.nonNullable.control('', nonBlank),
   });
+
   readonly items = signal<Celda[]>([]);
   readonly total = signal(0);
   readonly offset = signal(0);
@@ -41,8 +52,14 @@ export class Celdas {
   readonly listError = signal('');
   readonly actionError = signal('');
   readonly success = signal('');
-  readonly page = computed(() => Math.floor(this.offset() / this.limit) + 1);
-  readonly pages = computed(() => Math.max(1, Math.ceil(this.total() / this.limit)));
+
+  readonly page = computed(
+    () => Math.floor(this.offset() / this.limit) + 1
+  );
+
+  readonly pages = computed(
+    () => Math.max(1, Math.ceil(this.total() / this.limit))
+  );
 
   constructor() {
     this.load();
@@ -50,18 +67,27 @@ export class Celdas {
 
   load(offset = this.offset()): void {
     if (this.busy()) return;
+
     this.loading.set(true);
     this.listError.set('');
+
     this.api
       .list(offset, this.limit)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (data) => {
           this.loading.set(false);
+
           if (offset > 0 && offset >= data.total) {
-            this.load(Math.max(0, Math.floor((data.total - 1) / this.limit) * this.limit));
+            this.load(
+              Math.max(
+                0,
+                Math.floor((data.total - 1) / this.limit) * this.limit
+              )
+            );
             return;
           }
+
           this.items.set(data.items);
           this.total.set(data.total);
           this.offset.set(offset);
@@ -74,7 +100,8 @@ export class Celdas {
   }
 
   newCell(): void {
-    if (this.busy()) return;
+    if (!this.auth.isAdmin() || this.busy()) return;
+
     this.form.reset();
     this.editing.set(null);
     this.showForm.set(true);
@@ -84,11 +111,13 @@ export class Celdas {
   }
 
   edit(cell: Celda): void {
-    if (this.busy()) return;
+    if (!this.auth.isAdmin() || this.busy()) return;
+
     this.loading.set(true);
     this.actionError.set('');
     this.success.set('');
     this.pendingDelete.set(null);
+
     this.api
       .get(cell.id)
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -108,6 +137,7 @@ export class Celdas {
 
   cancel(): void {
     if (this.busy()) return;
+
     this.showForm.set(false);
     this.pendingDelete.set(null);
     this.actionError.set('');
@@ -115,52 +145,84 @@ export class Celdas {
 
   fieldError(field: Field): string {
     const control = this.form.controls[field];
+
     if (!control.touched || !control.errors) return '';
     if (control.errors['server']) return String(control.errors['server']);
-    if (control.errors['required']) return 'Este campo es obligatorio y no puede estar vacío.';
+    if (control.errors['required']) {
+      return 'Este campo es obligatorio y no puede estar vacío.';
+    }
+
     return 'Revisa este campo.';
   }
 
   save(): void {
-    if (this.busy()) return;
+    if (!this.auth.isAdmin() || this.busy()) return;
+
     this.form.markAllAsTouched();
+
     if (this.form.invalid) {
-      this.actionError.set('Revisa los campos señalados antes de guardar la celda.');
+      this.actionError.set(
+        'Revisa los campos señalados antes de guardar la celda.'
+      );
       return;
     }
+
     const value = this.form.getRawValue();
+
     const payload: CeldaCrear = {
       codigo: value.codigo.trim().toUpperCase(),
       tipo: value.tipo.trim(),
     };
+
     this.form.controls.codigo.setValue(payload.codigo);
     this.saving.set(true);
     this.actionError.set('');
     this.success.set('');
+
     const id = this.editing();
-    const request = id === null ? this.api.create(payload) : this.api.update(id, payload);
+
+    const request =
+      id === null
+        ? this.api.create(payload)
+        : this.api.update(id, payload);
+
     request.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (cell) => {
         this.saving.set(false);
         this.showForm.set(false);
+
         this.success.set(
-          `Celda ${cell.codigo} ${id === null ? 'registrada' : 'actualizada'} correctamente.`,
+          `Celda ${cell.codigo} ${
+            id === null ? 'registrada' : 'actualizada'
+          } correctamente.`
         );
+
         this.load();
       },
       error: (error: HttpErrorResponse) => {
         this.saving.set(false);
         this.actionError.set(this.errorMessage(error));
-        if (error.status === 409)
-          this.setFieldError('codigo', 'Ya existe una celda con ese código.');
+
+        if (error.status === 409) {
+          this.setFieldError(
+            'codigo',
+            'Ya existe una celda con ese código.'
+          );
+        }
+
         const body = error.error as ErrorApi | null;
+
         if (error.status === 422 && Array.isArray(body?.detail)) {
           for (const issue of body.detail) {
             const field = issue.loc.at(-1);
-            if (typeof field === 'string' && Object.hasOwn(this.form.controls, field)) {
+
+            if (
+              typeof field === 'string' &&
+              Object.hasOwn(this.form.controls, field)
+            ) {
               this.setFieldError(
                 field as Field,
-                'El servicio rechazó este valor. Revisa el campo.',
+                'El servicio rechazó este valor. Revisa el campo.'
               );
             }
           }
@@ -175,7 +237,8 @@ export class Celdas {
   }
 
   confirmDelete(cell: Celda): void {
-    if (this.busy()) return;
+    if (!this.auth.isAdmin() || this.busy()) return;
+
     this.pendingDelete.set(cell);
     this.showForm.set(false);
     this.actionError.set('');
@@ -183,10 +246,15 @@ export class Celdas {
   }
 
   remove(): void {
+    if (!this.auth.isAdmin()) return;
+
     const cell = this.pendingDelete();
+
     if (!cell || this.busy()) return;
+
     this.saving.set(true);
     this.actionError.set('');
+
     this.api
       .delete(cell.id)
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -194,12 +262,17 @@ export class Celdas {
         next: () => {
           this.saving.set(false);
           this.pendingDelete.set(null);
-          this.success.set(`Celda ${cell.codigo} eliminada correctamente.`);
+
+          this.success.set(
+            `Celda ${cell.codigo} eliminada correctamente.`
+          );
+
           this.load();
         },
         error: (error) => {
           this.saving.set(false);
           this.actionError.set(this.errorMessage(error, true));
+
           if (error.status === 404) {
             this.pendingDelete.set(null);
             this.load();
@@ -208,15 +281,24 @@ export class Celdas {
       });
   }
 
-  private errorMessage(error: HttpErrorResponse, deleting = false): string {
-    if (error.status === 404) return 'La celda ya no existe. Actualiza el listado.';
-    if (error.status === 409)
+  private errorMessage(
+    error: HttpErrorResponse,
+    deleting = false
+  ): string {
+    if (error.status === 404) {
+      return 'La celda ya no existe. Actualiza el listado.';
+    }
+
+    if (error.status === 409) {
       return deleting
         ? 'No se puede eliminar: la celda tiene registros relacionados o un conflicto con otros datos.'
         : 'Ya existe una celda con ese código.';
-    if (error.status === 422)
+    }
+
+    if (error.status === 422) {
       return 'Revisa los datos: hay campos que no cumplen las validaciones.';
+    }
+
     return 'No se pudo conectar con el servicio. Comprueba la conexión y actualiza el listado antes de reintentar.';
   }
 }
-

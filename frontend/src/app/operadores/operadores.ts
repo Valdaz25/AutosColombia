@@ -23,10 +23,12 @@ export class Operadores {
   readonly fields = [
     { key: 'nombre' as const, label: 'Nombre' },
     { key: 'telefono' as const, label: 'Teléfono' },
+    { key: 'documento' as const, label: 'Documento' },
   ];
   readonly form = this.fb.group({
     nombre: this.fb.nonNullable.control('', nonBlank),
     telefono: this.fb.nonNullable.control('', nonBlank),
+    documento: this.fb.nonNullable.control('', nonBlank),
   });
   readonly items = signal<Operador[]>([]);
   readonly total = signal(0);
@@ -132,6 +134,7 @@ export class Operadores {
     const payload: OperadorCrear = {
       nombre: value.nombre.trim(),
       telefono: value.telefono.trim(),
+      documento: value.documento.trim(),
     };
     this.form.setValue(payload);
     this.saving.set(true);

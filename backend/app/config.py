@@ -52,3 +52,38 @@ def load_database_settings() -> DatabaseSettings:
         password=values["DB_PASSWORD"],
         connect_timeout=positive_integer("DB_CONNECT_TIMEOUT", 60),
     )
+@dataclass(frozen=True)
+class AuthSettings:
+    secret_key: str = field(repr=False)
+    access_token_minutes: int = 30
+
+
+def load_auth_settings() -> AuthSettings:
+    values = {
+        **dotenv_values(ENV_FILE, encoding="utf-8-sig", interpolate=False),
+        **os.environ,
+    }
+
+    secret = (values.get("JWT_SECRET_KEY") or "").strip()
+
+    if len(secret) < 32 or secret == "CAMBIAR_CLAVE_SECRETA":
+        raise ConfigurationError(
+            "Configura JWT_SECRET_KEY con una clave segura en backend/.env."
+        )
+
+    try:
+        minutes = int(values.get("JWT_ACCESS_TOKEN_MINUTES", "30"))
+    except (ValueError, TypeError):
+        raise ConfigurationError(
+            "JWT_ACCESS_TOKEN_MINUTES debe ser un entero."
+        ) from None
+
+    if not 1 <= minutes <= 1440:
+        raise ConfigurationError(
+            "JWT_ACCESS_TOKEN_MINUTES debe estar entre 1 y 1440."
+        )
+
+    return AuthSettings(
+        secret_key=secret,
+        access_token_minutes=minutes,
+    )

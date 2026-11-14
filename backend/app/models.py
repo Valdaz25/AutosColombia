@@ -342,3 +342,92 @@ class Estancia(Base):
         self.salida = fecha_salida
         self.operador_salida = operador
         self.operador_salida_id = operador.id
+
+
+class Usuario(Base):
+    __tablename__ = "usuario"
+
+    __table_args__ = (
+        UniqueConstraint("nombre_usuario", name="uq_usuario_nombre_usuario"),
+        UniqueConstraint("operador_id", name="uq_usuario_operador"),
+        CheckConstraint(
+            "nombre_usuario ~ '^[a-z0-9._-]{3,50}$'",
+            name="ck_usuario_nombre_usuario",
+        ),
+        CheckConstraint(
+            "rol IN ('ADMINISTRADOR', 'OPERADOR')",
+            name="ck_usuario_rol",
+        ),
+        CheckConstraint(
+            "password_hash ~ '[^[:space:]]'",
+            name="ck_usuario_password_hash",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(
+        BigInteger,
+        Identity(always=True),
+        primary_key=True,
+    )
+    nombre_usuario: Mapped[str] = mapped_column(Text, nullable=False)
+    password_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    rol: Mapped[str] = mapped_column(Text, nullable=False)
+
+    operador_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        ForeignKey(
+            "operador.id",
+            name="fk_usuario_operador",
+            ondelete="RESTRICT",
+        ),
+        nullable=True,
+    )
+
+    activo: Mapped[bool] = mapped_column(
+        default=True,
+        server_default=text("true"),
+        nullable=False,
+    )
+
+    creado_en: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    operador: Mapped[Operador | None] = relationship()
+
+    @validates("nombre_usuario")
+    def validate_nombre_usuario(self, key: str, value: str) -> str:
+        value = required_text(value, key).lower()
+
+        if not 3 <= len(value) <= 50:
+            raise ValueError(
+                "El nombre de usuario debe tener entre 3 y 50 caracteres."
+            )
+
+        if any(
+            not (
+                character.isascii()
+                and (
+                    character.islower()
+                    or character.isdigit()
+                    or character in "._-"
+                )
+            )
+            for character in value
+        ):
+            raise ValueError(
+                "El nombre de usuario contiene caracteres inválidos."
+            )
+
+        return value
+
+    @validates("rol")
+    def validate_rol(self, key: str, value: str) -> str:
+        value = required_text(value, key).upper()
+
+        if value not in {"ADMINISTRADOR", "OPERADOR"}:
+            raise ValueError("El rol debe ser ADMINISTRADOR u OPERADOR.")
+
+        return value

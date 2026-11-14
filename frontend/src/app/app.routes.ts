@@ -1,26 +1,58 @@
+
 import { Routes } from '@angular/router';
+
+import { authGuard } from './services/auth.guard';
+import { adminGuard } from './services/admin.guard';
 
 export const routes: Routes = [
   {
+    path: 'login',
+    title: 'Iniciar sesión | Autos Colombia',
+    loadComponent: () =>
+      import('./login/login').then((m) => m.Login),
+  },
+  {
     path: 'control-acceso',
     title: 'Control de acceso | Autos Colombia',
-    loadComponent: () => import('./control-acceso/control-acceso').then((m) => m.ControlAcceso),
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./control-acceso/control-acceso').then((m) => m.ControlAcceso),
+  },
+  {
+    path: 'gestion/usuarios',
+    title: 'Usuarios | Autos Colombia',
+    canActivate: [authGuard, adminGuard],
+    loadComponent: () =>
+      import('./usuarios/usuarios').then((m) => m.UsuariosComponent),
   },
   {
     path: 'gestion/operadores',
     title: 'Operadores | Autos Colombia',
-    loadComponent: () => import('./operadores/operadores').then((m) => m.Operadores),
+    canActivate: [authGuard, adminGuard],
+    loadComponent: () =>
+      import('./operadores/operadores').then((m) => m.Operadores),
   },
   {
     path: 'gestion/celdas',
     title: 'Celdas | Autos Colombia',
-    loadComponent: () => import('./celdas/celdas').then((m) => m.Celdas),
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./celdas/celdas').then((m) => m.Celdas),
   },
-  { path: '', pathMatch: 'full', loadComponent: () => import('./home/home').then((m) => m.Home) },
   {
     path: 'gestion/vehiculos',
     title: 'Vehículos | Autos Colombia',
-    loadComponent: () => import('./vehiculos/vehiculos').then((m) => m.Vehiculos),
+    canActivate: [authGuard, adminGuard],
+    loadComponent: () =>
+      import('./vehiculos/vehiculos').then((m) => m.Vehiculos),
   },
-  { path: '**', redirectTo: '' },
+  {
+    path: '',
+    pathMatch: 'full',
+    redirectTo: 'login',
+  },
+  {
+    path: '**',
+    redirectTo: 'login',
+  },
 ];

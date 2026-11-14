@@ -1,11 +1,16 @@
+
 export interface OperadorCrear {
   nombre: string;
   telefono: string;
+  documento: string;
 }
+
 export type OperadorActualizar = Partial<OperadorCrear>;
+
 export interface Operador extends OperadorCrear {
   id: number;
 }
+
 export interface OperadoresPagina {
   items: Operador[];
   total: number;
